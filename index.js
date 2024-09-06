@@ -26,20 +26,9 @@ const findMidpoint = async () => {
     clearRouteAndMarkers();
     document.getElementById("time").innerHTML = "";
 
-    // Clear existing route and markers before calculating new ones
-    if (directionsRenderer != null) {
-        directionsRenderer.setMap(null);
-        directionsRenderer = null;
-    }
-    console.log(markers.length)
-    for (let i = 0; i < markers.length; i++) {
-        markers[i].map = null;
-    }
-    markers = [];
-
     // Geocode the city using the Places API
     const placesService = new google.maps.places.PlacesService(map);
-    placesService.textSearch({ query: city + ", USA" }, (results, status) => {
+    placesService.textSearch({ query: city + ", USA" }, async (results, status) => {
         if (status !== google.maps.places.PlacesServiceStatus.OK || !results[0]) {
             document.getElementById("coordinates").InnerHTML = "<p>Could not find the specified city. Please try again.</p>";
             return;
@@ -54,8 +43,87 @@ const findMidpoint = async () => {
         const lon2 = getRandomCoordinate(west, east);
 
         // Calculate walking route
-        calculateRouteAndMidpoint(lat1, lon1, lat2, lon2);
+        const data = calculateRouteAndMidpoint(lat1, lon1, lat2, lon2);
+        const responseData = await sendRequest(data);
+        const mockData = [
+            {
+                "Location": {
+                    "latitude": 37.7971898,
+                    "longitude": -122.4218597
+                },
+                "Name": "Royal Ground Coffee"
+            },
+            {
+                "Location": {
+                    "latitude": 37.799309199999996,
+                    "longitude": -122.42231019999998
+                },
+                "Name": "Fueling Station Cafe"
+            },
+            {
+                "Location": {
+                    "latitude": 37.796541999999995,
+                    "longitude": -122.42205799999999
+                },
+                "Name": "Peet's Coffee"
+            },
+            {
+                "Location": {
+                    "latitude": 37.8021467,
+                    "longitude": -122.42496929999999
+                },
+                "Name": "Cafe Le"
+            },
+            {
+                "Location": {
+                    "latitude": 37.8025685,
+                    "longitude": -122.4251404
+                },
+                "Name": "First Cup Café"
+            }
+        ];
+        if (responseData) {
+            displayLocations(responseData);
+        }
+
     });
+};
+
+const displayLocations = (locations) => {
+    locations.forEach(location => {
+        const position = {
+            lat: location.Location.latitude,
+            lng: location.Location.longitude
+        };
+        const marker = new google.maps.marker.AdvancedMarkerElement({
+            map: map,
+            position: position,
+            title: location.Name,
+        });
+        markers.push(marker);
+    });
+};
+
+const sendRequest = async data => {
+    try {
+        const response = await fetch("https://us-central1-hyunuk-ai-dev.cloudfunctions.net/function-2", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const responseData = await response.json();
+        console.log("Response from Cloud Function:", responseData);
+        return responseData;
+    } catch (error) {
+        console.error("Error sending POST request:", error);
+    }
 };
 
 const getBoundingBox = viewport => ({
@@ -75,7 +143,7 @@ const calculateRouteAndMidpoint = (lat1, lon1, lat2, lon2) => {
         travelMode: google.maps.TravelMode.WALKING,
     };
 
-    directionsService.route(request, (response, status) => {
+    directionsService.route(request, async (response, status) => {
             if (status !== "OK") {
                 document.getElementById("coordinates").innerHTML = `<p>Could not find a walking route between the two points. Error: ${status}</p>`;
                 return;
@@ -95,6 +163,16 @@ const calculateRouteAndMidpoint = (lat1, lon1, lat2, lon2) => {
 
             calculateTravelTime(lat1, lon1, midLat, midLng, "A");
             calculateTravelTime(lat2, lon2, midLat, midLng, "B");
+
+            const prompt = document.getElementById("prompt").value;
+            const data = {
+                "prompt": prompt,
+                "midLat": midLat,
+                "midLng": midLng
+            };
+            console.log(data)
+
+            return data;
         }
     );
 };
